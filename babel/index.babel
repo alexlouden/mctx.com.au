@@ -1,0 +1,138 @@
+let svg = d3.select("svg")
+
+window.addEventListener('resize', resize)
+
+function resize() {
+  let container = document.getElementById('container')
+  let width = container.clientWidth
+  let height = container.clientHeight
+  svg.attr("width", width).attr("height", height)
+  return {width, height}
+}
+
+let {width, height} = resize()
+
+// Center logo
+let logo = svg.select('.logo')
+let bbox = logo.node().getBBox()
+let logox = (width - bbox.width)/2
+let logoy = (height - bbox.height)/2
+logo.attr('transform', `translate(${logox}, ${logoy})`)
+
+function grid2D(xCells, yCells, rand) {
+  let xs = d3.scaleLinear().range([0, width]);
+  let ys = d3.scaleLinear().range([0, height]);
+  let out = [];
+  d3.range(xCells).map( x => {
+    d3.range(yCells).map ( y => {
+      let xo = xs(x/(xCells - 1));
+      let yo = ys(y/(yCells - 1));
+      // If not on X border
+      if (!(x == 0 || x >= xCells - 1 )) {
+        xo += (Math.random() - 0.5) * rand;
+      }
+      // // If not on Y border
+      if (!(y == 0 || y >= yCells - 1 )) {
+        yo += (Math.random() - 0.5) * rand;
+      }
+      out.push([xo, yo])
+    })
+  })
+  return out
+}
+
+let cellSize = 25;
+let randomness = 30; // px
+let nodes = grid2D(Math.round(width / cellSize), Math.round(height / cellSize), randomness)
+
+let getLogoNodes = (el) => {
+  let nodes = [];
+  for (let path of el.selectAll('path').nodes()){
+    let previous = null
+    for (let segment of path.getPathData({normalize: true})) {
+      let type = segment.type;
+      
+      if (type == 'M' || type == 'L' || type == 'C'){
+        let [x, y] = segment.values
+        nodes.push([x + logox, y + logoy])
+        
+        if (previous) {
+          // Split long segments in two
+          let [prevx, prevy] = previous.values
+          let length = Math.sqrt((prevx - x)**2 + (prevy - y)**2)
+          if (length > 40) {
+            let splits = Math.round(length / 30)
+            console.log('%o - %o splits', length, splits)
+            let [dx, dy] = [x - prevx, y - prevy]
+            for(let i = 1; i < splits; i++)
+              nodes.push([
+                prevx + logox + dx*i/splits,
+                prevy + logoy + dy*i/splits
+              ])
+          }
+        }
+        previous = segment
+      }
+    }
+  }
+  return nodes 
+}
+
+let filterNodesInLogo = (nodes) => {
+  let out = []
+  console.log(bbox)
+  for (let [x, y] of nodes) {
+    let box_x = bbox.x + logox < x && x < bbox.x + bbox.width + logox;
+    let box_y = bbox.y + logoy < y && y < bbox.y + bbox.height + logoy;
+    if (box_x && box_y){
+      // handle svg not being at y = 0
+      let svgTop = svg.node().getBoundingClientRect().top
+      // what element is at this point?
+      let el = document.elementFromPoint(x, y + svgTop)
+      debugger
+      if (el && el.tagName == 'svg') {
+        out.push([x, y])
+      }
+    } else {
+      out.push([x, y])
+    }
+  }
+  return out
+}
+
+nodes = filterNodesInLogo(nodes)
+
+let logoNodes = getLogoNodes(logo)
+nodes = nodes.concat(logoNodes)
+                     
+let voronoi = d3.voronoi()
+
+let link = svg.insert("g", ".logo")
+    .attr("class", "links")
+  .selectAll("line")
+  .data(voronoi.links(nodes))
+  .enter().append("line")
+    .call(drawLink)
+
+let node = svg.append("g")
+  .attr("class", "nodes")
+  .selectAll("circle")
+  .data(nodes)
+  .enter().append("circle")
+    .attr("r", 2.5)
+    .call(drawNode)
+
+
+function drawLink(link) {
+  link
+    .attr("x1", d => d.source[0] )
+    .attr("y1", d => d.source[1] )
+    .attr("x2", d => d.target[0] )
+    .attr("y2", d => d.target[1] )
+}
+
+function drawNode(node) {
+  node
+    .attr("cx", d => d[0] )
+    .attr("cy", d => d[1] )
+}
