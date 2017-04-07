@@ -45,6 +45,10 @@ table {
 
 
 /* Styles */
+html {
+  overflow-y: hidden;
+}
+
 body {
   background-color: black;
 }
@@ -76,17 +80,25 @@ a {
 
 .logo {
   fill: black;
-  stroke: white;
-  stroke-width: 0.3px;
 }
 
-.links {
+.triangles {
   stroke: white;
-  stroke-width: 0.3px;
+  stroke-width: 0.5px;
 }
 
-.nodes {
-  fill: white;
-  stroke: black;
-  opacity: 0.2;
+.colour0 {
+  fill: #FF605C;
+}
+
+.colour1 {
+  fill: #FFB173;
+}
+
+.colour2 {
+  fill: #2C3D95;
+}
+
+.colour3 {
+  fill: #C0DFE2;
 }

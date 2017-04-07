@@ -51,18 +51,15 @@ let getLogoNodes = (el) => {
     let previous = null
     for (let segment of path.getPathData({normalize: true})) {
       let type = segment.type;
-      
       if (type == 'M' || type == 'L' || type == 'C'){
         let [x, y] = segment.values
         nodes.push([x + logox, y + logoy])
-        
         if (previous) {
           // Split long segments in two
           let [prevx, prevy] = previous.values
           let length = Math.sqrt((prevx - x)**2 + (prevy - y)**2)
           if (length > 40) {
             let splits = Math.round(length / 30)
-            console.log('%o - %o splits', length, splits)
             let [dx, dy] = [x - prevx, y - prevy]
             for(let i = 1; i < splits; i++)
               nodes.push([
@@ -75,12 +72,11 @@ let getLogoNodes = (el) => {
       }
     }
   }
-  return nodes 
+  return nodes
 }
 
 let filterNodesInLogo = (nodes) => {
   let out = []
-  console.log(bbox)
   for (let [x, y] of nodes) {
     let box_x = bbox.x + logox < x && x < bbox.x + bbox.width + logox;
     let box_y = bbox.y + logoy < y && y < bbox.y + bbox.height + logoy;
@@ -89,7 +85,6 @@ let filterNodesInLogo = (nodes) => {
       let svgTop = svg.node().getBoundingClientRect().top
       // what element is at this point?
       let el = document.elementFromPoint(x, y + svgTop)
-      debugger
       if (el && el.tagName == 'svg') {
         out.push([x, y])
       }
@@ -104,23 +99,34 @@ nodes = filterNodesInLogo(nodes)
 
 let logoNodes = getLogoNodes(logo)
 nodes = nodes.concat(logoNodes)
-                     
+
 let voronoi = d3.voronoi()
+let triangles = voronoi.triangles(nodes)
 
-let link = svg.insert("g", ".logo")
-    .attr("class", "links")
-  .selectAll("line")
-  .data(voronoi.links(nodes))
-  .enter().append("line")
-    .call(drawLink)
+debugger
 
-let node = svg.append("g")
-  .attr("class", "nodes")
-  .selectAll("circle")
-  .data(nodes)
-  .enter().append("circle")
-    .attr("r", 2.5)
-    .call(drawNode)
+// var triangles = svg.insert("g", ".logo")
+var triangle = svg.append("g")
+  .attr("class", "triangles")
+  .selectAll("path")
+  .data(triangles)
+  .enter().append("path")
+    .call(drawTriangle)
+
+// let link = svg.insert("g", ".logo")
+//     .attr("class", "links")
+//   .selectAll("line")
+//   .data(voronoi.links(nodes))
+//   .enter().append("line")
+//     .call(drawLink)
+
+// let node = svg.append("g")
+//   .attr("class", "nodes")
+//   .selectAll("circle")
+//   .data(nodes)
+//   .enter().append("circle")
+//     .attr("r", 2.5)
+//     .call(drawNode)
 
 
 function drawLink(link) {
@@ -135,4 +141,8 @@ function drawNode(node) {
   node
     .attr("cx", d => d[0] )
     .attr("cy", d => d[1] )
+}
+
+function drawTriangle(tri) {
+  tri.attr("d", d => d ? "M" + d.join("L") + "Z" : null)
 }
