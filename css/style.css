@@ -55,50 +55,74 @@ body {
 
 #container {
   position: fixed;
-  top: 100px;
-  bottom: 100px;
+  top: 20px;
+  bottom: 60px;
   width: 100%;
 }
 
 h1, h3 {
   font-family: "Biryani", sans-serif;
   position: absolute;
-  bottom: -50px;
+  bottom: -10px;
   font-size: 14px;
   text-align: center;
-  color: gray;
+  color: #b23d39;
   width: 100%;
 }
 
 h3 {
-  bottom: -70px;
+  bottom: -30px;
 }
 
 a {
-  color: gray;
+  color: #b23d39;
 }
 
 .logo {
-  fill: black;
+  fill: transparent;
 }
 
 .triangles {
-  stroke: white;
-  stroke-width: 0.5px;
+  stroke-width: 0.3px;
 }
 
 .colour0 {
-  fill: #FF605C;
+  fill: #142438;
+  stroke: #142438;
+}
+.colour0.logo {
+  fill: #2c100f;
+  stroke: #2c100f;
 }
 
 .colour1 {
-  fill: #FFB173;
+  fill: #213c5e;
+  stroke: #213c5e;
+}
+.colour1.logo {
+  fill: #411816;
+  stroke: #411816;
 }
 
 .colour2 {
-  fill: #2C3D95;
+  fill: #335f99;
+  stroke: #335f99;
+}
+.colour2.logo {
+  fill: #561f1d;
+  stroke: #561f1d;
 }
 
 .colour3 {
-  fill: #C0DFE2;
+  fill: #6492ce;
+  stroke: #6492ce;
+}
+.colour3.logo {
+  fill: #973531;
+  stroke: #973531;
+}
+
+.colouredge {
+  fill: black;
+  stroke: black;
 }

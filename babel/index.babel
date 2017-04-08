@@ -11,6 +11,7 @@ function resize() {
 }
 
 let {width, height} = resize()
+let svgTop = svg.node().getBoundingClientRect().top
 
 // Center logo
 let logo = svg.select('.logo')
@@ -35,37 +36,47 @@ function grid2D(xCells, yCells, rand) {
       if (!(y == 0 || y >= yCells - 1 )) {
         yo += (Math.random() - 0.5) * rand;
       }
-      out.push([xo, yo])
+      out.push([Math.round(xo), Math.round(yo)])
     })
   })
   return out
 }
 
-let cellSize = 25;
-let randomness = 30; // px
-let nodes = grid2D(Math.round(width / cellSize), Math.round(height / cellSize), randomness)
-
 let getLogoNodes = (el) => {
   let nodes = [];
+  let x, y, nx, ny, prevx, prevy, length;
   for (let path of el.selectAll('path').nodes()){
     let previous = null
+    let previousSplits = 0
     for (let segment of path.getPathData({normalize: true})) {
       let type = segment.type;
       if (type == 'M' || type == 'L' || type == 'C'){
-        let [x, y] = segment.values
-        nodes.push([x + logox, y + logoy])
+        [x, y] = segment.values
+        nodes.push([Math.round(x + logox), Math.round(y + logoy)])
         if (previous) {
-          // Split long segments in two
-          let [prevx, prevy] = previous.values
-          let length = Math.sqrt((prevx - x)**2 + (prevy - y)**2)
-          if (length > 40) {
-            let splits = Math.round(length / 30)
+          // Split long segments up
+          [prevx, prevy] = previous.values
+          length = Math.sqrt((prevx - x)**2 + (prevy - y)**2)
+          if (length > 25) {
+            let splits = Math.round(length / 25)
+            if (splits == previousSplits) {
+              console.log(splits, previousSplits)
+              if (Math.random() > 0.5)
+                splits += 1
+              else
+                splits -= 1
+            }
+            previousSplits = splits
             let [dx, dy] = [x - prevx, y - prevy]
-            for(let i = 1; i < splits; i++)
-              nodes.push([
-                prevx + logox + dx*i/splits,
-                prevy + logoy + dy*i/splits
-              ])
+            for (let i = 1; i < splits; i++) {
+              nx = prevx + logox + dx*i/splits
+              ny = prevy + logoy + dy*i/splits
+              if (splits > 2) {
+                // prevent perfect triangles
+                ny += Math.random() * 4 - 2
+              }
+              nodes.push([Math.round(nx), Math.round(ny)])  
+            }
           }
         }
         previous = segment
@@ -82,7 +93,6 @@ let filterNodesInLogo = (nodes) => {
     let box_y = bbox.y + logoy < y && y < bbox.y + bbox.height + logoy;
     if (box_x && box_y){
       // handle svg not being at y = 0
-      let svgTop = svg.node().getBoundingClientRect().top
       // what element is at this point?
       let el = document.elementFromPoint(x, y + svgTop)
       if (el && el.tagName == 'svg') {
@@ -95,53 +105,160 @@ let filterNodesInLogo = (nodes) => {
   return out
 }
 
-nodes = filterNodesInLogo(nodes)
+let reorder = (v1, v2) =>
+  v1[0] > v2[0] ? [v1, v2] : [v2, v1] 
 
-let logoNodes = getLogoNodes(logo)
-nodes = nodes.concat(logoNodes)
+let getEdges = (tri) => {
+  let [v1, v2, v3] = tri
+  return [
+    reorder(v1, v2),
+    reorder(v2, v3),
+    reorder(v1, v3)
+  ]
+}
+
+Set.prototype.difference = function(setB) {
+    var difference = new Set(this);
+    for (var elem of setB) {
+        difference.delete(elem);
+    }
+    return difference;
+}
+
+Set.prototype.random = function() {
+  return Array.from(this)[Math.floor(Math.random() * this.size)]
+}
+
+let getUniqueColour = (neighbours) => {
+  let neighbouringColours = []
+  for (let n of neighbours) {
+    neighbouringColours.push(triangleColours[n])
+  }
+  return colours.difference(neighbouringColours).random()
+}
+
+let getNeighbours = (tri) => {
+  let neighbours = []
+  for (let edge of getEdges(tri)) {
+    let es = [edge.toString()]
+    let et = edgeTriangles[es]
+    if (et === undefined) {
+      // new edge
+      edgeTriangles[es] = []
+    } else {
+      neighbours = neighbours.concat(et)
+    }
+    edgeTriangles[es].push(tri.toString())
+  }
+  return neighbours
+}
+
+let isEdgeTriangle = (tri) => {
+  for (let edge of getEdges(tri)) {
+    for (let [x, y] of edge) {
+      if (y == 0 || y == height) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+let getCenter = (tri) => {
+  let centerX = (tri[0][0] + tri[1][0] + tri[2][0]) / 3
+  let centerY = (tri[0][1] + tri[1][1] + tri[2][1]) / 3
+  return [centerX, centerY]
+}
+
+let triangleInLogo = (tri) => {
+  let [x, y] = getCenter(tri)
+  let el = document.elementFromPoint(x, y + svgTop)
+  return !(el && el.tagName == 'svg')
+}
+
+let getTriangleClass = (tri) => {
+  let colour
+  if (isEdgeTriangle(tri)) {
+    colour = 'edge'
+  } else {
+    let neighbours = getNeighbours(tri)
+    colour = getUniqueColour(neighbours)  
+  }
+  triangleColours[tri.toString()] = colour
+  if (colour != 'edge' && triangleInLogo(tri)) {
+    colour += ' logo'
+  }
+  return "colour" + colour
+}
+
+let generateNodes = () => {
+  let cellsX = Math.round(width / cellSize)
+  let cellsY = Math.round(height / cellSize)
+  let nodes = grid2D(cellsX, cellsY, randomness)
+  nodes = filterNodesInLogo(nodes)
+  let logoNodes = getLogoNodes(logo)
+  return nodes.concat(logoNodes)
+}
+
+/////////////////////////////////////////////
+
+let cellSize = 45
+let randomness = 30 // px
+
+let nodes = generateNodes()
 
 let voronoi = d3.voronoi()
 let triangles = voronoi.triangles(nodes)
 
-debugger
+let colours = new Set([0, 1, 2, 3])
+let triangleColours = {}
+let edgeTriangles = {}
 
-// var triangles = svg.insert("g", ".logo")
-var triangle = svg.append("g")
+let triangle = svg.insert("g", ".logo")
   .attr("class", "triangles")
   .selectAll("path")
   .data(triangles)
   .enter().append("path")
+    .attr("class", getTriangleClass)
     .call(drawTriangle)
 
-// let link = svg.insert("g", ".logo")
-//     .attr("class", "links")
-//   .selectAll("line")
-//   .data(voronoi.links(nodes))
-//   .enter().append("line")
-//     .call(drawLink)
+let animation = (mousex, mousey) => {
+  let loop = (t) => {
 
-// let node = svg.append("g")
-//   .attr("class", "nodes")
-//   .selectAll("circle")
-//   .data(nodes)
-//   .enter().append("circle")
-//     .attr("r", 2.5)
-//     .call(drawNode)
+    let newTriangles = []
+    let decay, m, delta, d
 
-
-function drawLink(link) {
-  link
-    .attr("x1", d => d.source[0] )
-    .attr("y1", d => d.source[1] )
-    .attr("x2", d => d.target[0] )
-    .attr("y2", d => d.target[1] )
+    for (let tri of triangles) {
+      let v = []
+      for (let [x, y] of tri) {
+        m = 5 * Math.exp(-0.2 * t/1000)
+        delta = Math.sqrt((x - mousex)**2 + (y - mousey)**2)
+        d = m * Math.sin(0.02 * delta - 4 * t/1000)
+        // let dy = m * Math.sin(k * delta - wt)
+        v.push([
+          x + d * (mousex - x)/300,
+          y + d * (mousey - y)/300
+        ])
+      }
+      newTriangles.push(v)
+    }
+    triangle.data(newTriangles).call(drawTriangle)
+  }
+  return loop
 }
 
-function drawNode(node) {
-  node
-    .attr("cx", d => d[0] )
-    .attr("cy", d => d[1] )
-}
+let t, t2
+svg.on("click", (e) => {
+
+  let mousex = d3.event.clientX
+  let mousey = d3.event.clientY
+  mousey -= svgTop
+  
+  if (t !== undefined) t.stop()
+  t = d3.timer(animation(mousex, mousey))
+  if (t2 !== undefined) t2.stop()
+  t2 = d3.timeout(() => t.stop(), 20000)
+})
 
 function drawTriangle(tri) {
   tri.attr("d", d => d ? "M" + d.join("L") + "Z" : null)

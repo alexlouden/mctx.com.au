@@ -17,8 +17,9 @@ var _resize = resize();
 var width = _resize.width;
 var height = _resize.height;
 
-// Center logo
+var svgTop = svg.node().getBoundingClientRect().top;
 
+// Center logo
 var logo = svg.select('.logo');
 var bbox = logo.node().getBBox();
 var logox = (width - bbox.width) / 2;
@@ -47,12 +48,15 @@ function grid2D(xCells, yCells, rand) {
   return out;
 }
 
-var cellSize = 30;
-var randomness = 40; // px
-var nodes = grid2D(Math.round(width / cellSize), Math.round(height / cellSize), randomness);
-
 var getLogoNodes = function getLogoNodes(el) {
   var nodes = [];
+  var x = undefined,
+      y = undefined,
+      nx = undefined,
+      ny = undefined,
+      prevx = undefined,
+      prevy = undefined,
+      length = undefined;
   for (var _iterator = el.selectAll('path').nodes(), _isArray = Array.isArray(_iterator), _i = 0, _iterator = _isArray ? _iterator : _iterator[Symbol.iterator]();;) {
     var _ref;
 
@@ -68,6 +72,7 @@ var getLogoNodes = function getLogoNodes(el) {
     var path = _ref;
 
     var previous = null;
+    var previousSplits = 0;
     for (var _iterator2 = path.getPathData({ normalize: true }), _isArray2 = Array.isArray(_iterator2), _i2 = 0, _iterator2 = _isArray2 ? _iterator2 : _iterator2[Symbol.iterator]();;) {
       var _ref2;
 
@@ -85,24 +90,36 @@ var getLogoNodes = function getLogoNodes(el) {
       var type = segment.type;
       if (type == 'M' || type == 'L' || type == 'C') {
         var _segment$values = segment.values;
-        var x = _segment$values[0];
-        var y = _segment$values[1];
+        x = _segment$values[0];
+        y = _segment$values[1];
 
         nodes.push([Math.round(x + logox), Math.round(y + logoy)]);
         if (previous) {
-          // Split long segments up
           var _previous$values = previous.values;
-          var prevx = _previous$values[0];
-          var prevy = _previous$values[1];
+          // Split long segments up
 
-          var length = Math.sqrt(Math.pow(prevx - x, 2) + Math.pow(prevy - y, 2));
-          if (length > 30) {
-            var splits = Math.round(length / 20);
+          prevx = _previous$values[0];
+          prevy = _previous$values[1];
+
+          length = Math.sqrt(Math.pow(prevx - x, 2) + Math.pow(prevy - y, 2));
+          if (length > 25) {
+            var splits = Math.round(length / 25);
+            if (splits == previousSplits) {
+              console.log(splits, previousSplits);
+              if (Math.random() > 0.5) splits += 1;else splits -= 1;
+            }
+            previousSplits = splits;
             var dx = x - prevx;
             var dy = y - prevy;
 
             for (var i = 1; i < splits; i++) {
-              nodes.push([Math.round(prevx + logox + dx * i / splits), Math.round(prevy + logoy + dy * i / splits)]);
+              nx = prevx + logox + dx * i / splits;
+              ny = prevy + logoy + dy * i / splits;
+              if (splits > 2) {
+                // prevent perfect triangles
+                ny += Math.random() * 4 - 2;
+              }
+              nodes.push([Math.round(nx), Math.round(ny)]);
             }
           }
         }
@@ -135,7 +152,6 @@ var filterNodesInLogo = function filterNodesInLogo(nodes) {
     var box_y = bbox.y + logoy < y && y < bbox.y + bbox.height + logoy;
     if (box_x && box_y) {
       // handle svg not being at y = 0
-      var svgTop = svg.node().getBoundingClientRect().top;
       // what element is at this point?
       var el = document.elementFromPoint(x, y + svgTop);
       if (el && el.tagName == 'svg') {
@@ -147,18 +163,6 @@ var filterNodesInLogo = function filterNodesInLogo(nodes) {
   }
   return out;
 };
-
-nodes = filterNodesInLogo(nodes);
-
-var logoNodes = getLogoNodes(logo);
-nodes = nodes.concat(logoNodes);
-
-var voronoi = d3.voronoi();
-var triangles = voronoi.triangles(nodes);
-
-var colours = new Set([0, 1, 2, 3]);
-var triangleColours = {};
-var edgeTriangles = {};
 
 var reorder = function reorder(v1, v2) {
   return v1[0] > v2[0] ? [v1, v2] : [v2, v1];
@@ -218,7 +222,7 @@ var getUniqueColour = function getUniqueColour(neighbours) {
   return colours.difference(neighbouringColours).random();
 };
 
-var getTriangleClass = function getTriangleClass(tri) {
+var getNeighbours = function getNeighbours(tri) {
   var neighbours = [];
   for (var _iterator6 = getEdges(tri), _isArray6 = Array.isArray(_iterator6), _i6 = 0, _iterator6 = _isArray6 ? _iterator6 : _iterator6[Symbol.iterator]();;) {
     var _ref7;
@@ -244,12 +248,103 @@ var getTriangleClass = function getTriangleClass(tri) {
     }
     edgeTriangles[es].push(tri.toString());
   }
-  var colour = getUniqueColour(neighbours);
+  return neighbours;
+};
+
+var isEdgeTriangle = function isEdgeTriangle(tri) {
+  for (var _iterator7 = getEdges(tri), _isArray7 = Array.isArray(_iterator7), _i7 = 0, _iterator7 = _isArray7 ? _iterator7 : _iterator7[Symbol.iterator]();;) {
+    var _ref8;
+
+    if (_isArray7) {
+      if (_i7 >= _iterator7.length) break;
+      _ref8 = _iterator7[_i7++];
+    } else {
+      _i7 = _iterator7.next();
+      if (_i7.done) break;
+      _ref8 = _i7.value;
+    }
+
+    var edge = _ref8;
+
+    for (var _iterator8 = edge, _isArray8 = Array.isArray(_iterator8), _i8 = 0, _iterator8 = _isArray8 ? _iterator8 : _iterator8[Symbol.iterator]();;) {
+      var _ref9;
+
+      if (_isArray8) {
+        if (_i8 >= _iterator8.length) break;
+        _ref9 = _iterator8[_i8++];
+      } else {
+        _i8 = _iterator8.next();
+        if (_i8.done) break;
+        _ref9 = _i8.value;
+      }
+
+      var _ref10 = _ref9;
+      var x = _ref10[0];
+      var y = _ref10[1];
+
+      if (y == 0 || y == height) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+var getCenter = function getCenter(tri) {
+  var centerX = (tri[0][0] + tri[1][0] + tri[2][0]) / 3;
+  var centerY = (tri[0][1] + tri[1][1] + tri[2][1]) / 3;
+  return [centerX, centerY];
+};
+
+var triangleInLogo = function triangleInLogo(tri) {
+  var _getCenter = getCenter(tri);
+
+  var x = _getCenter[0];
+  var y = _getCenter[1];
+
+  var el = document.elementFromPoint(x, y + svgTop);
+  return !(el && el.tagName == 'svg');
+};
+
+var getTriangleClass = function getTriangleClass(tri) {
+  var colour = undefined;
+  if (isEdgeTriangle(tri)) {
+    colour = 'edge';
+  } else {
+    var neighbours = getNeighbours(tri);
+    colour = getUniqueColour(neighbours);
+  }
   triangleColours[tri.toString()] = colour;
+  if (colour != 'edge' && triangleInLogo(tri)) {
+    colour += ' logo';
+  }
   return "colour" + colour;
 };
 
-var triangle = svg.insert("g", ".logo").attr("class", "triangles").selectAll("path").data(triangles).enter().append("path").call(drawTriangle).attr("class", getTriangleClass);
+var generateNodes = function generateNodes() {
+  var cellsX = Math.round(width / cellSize);
+  var cellsY = Math.round(height / cellSize);
+  var nodes = grid2D(cellsX, cellsY, randomness);
+  nodes = filterNodesInLogo(nodes);
+  var logoNodes = getLogoNodes(logo);
+  return nodes.concat(logoNodes);
+};
+
+/////////////////////////////////////////////
+
+var cellSize = 45;
+var randomness = 30; // px
+
+var nodes = generateNodes();
+
+var voronoi = d3.voronoi();
+var triangles = voronoi.triangles(nodes);
+
+var colours = new Set([0, 1, 2, 3]);
+var triangleColours = {};
+var edgeTriangles = {};
+
+var triangle = svg.insert("g", ".logo").attr("class", "triangles").selectAll("path").data(triangles).enter().append("path").attr("class", getTriangleClass).call(drawTriangle);
 
 var animation = function animation(mousex, mousey) {
   var loop = function loop(t) {
@@ -260,36 +355,36 @@ var animation = function animation(mousex, mousey) {
         delta = undefined,
         d = undefined;
 
-    for (var _iterator7 = triangles, _isArray7 = Array.isArray(_iterator7), _i7 = 0, _iterator7 = _isArray7 ? _iterator7 : _iterator7[Symbol.iterator]();;) {
-      var _ref8;
+    for (var _iterator9 = triangles, _isArray9 = Array.isArray(_iterator9), _i9 = 0, _iterator9 = _isArray9 ? _iterator9 : _iterator9[Symbol.iterator]();;) {
+      var _ref11;
 
-      if (_isArray7) {
-        if (_i7 >= _iterator7.length) break;
-        _ref8 = _iterator7[_i7++];
+      if (_isArray9) {
+        if (_i9 >= _iterator9.length) break;
+        _ref11 = _iterator9[_i9++];
       } else {
-        _i7 = _iterator7.next();
-        if (_i7.done) break;
-        _ref8 = _i7.value;
+        _i9 = _iterator9.next();
+        if (_i9.done) break;
+        _ref11 = _i9.value;
       }
 
-      var tri = _ref8;
+      var tri = _ref11;
 
       var v = [];
-      for (var _iterator8 = tri, _isArray8 = Array.isArray(_iterator8), _i8 = 0, _iterator8 = _isArray8 ? _iterator8 : _iterator8[Symbol.iterator]();;) {
-        var _ref9;
+      for (var _iterator10 = tri, _isArray10 = Array.isArray(_iterator10), _i10 = 0, _iterator10 = _isArray10 ? _iterator10 : _iterator10[Symbol.iterator]();;) {
+        var _ref12;
 
-        if (_isArray8) {
-          if (_i8 >= _iterator8.length) break;
-          _ref9 = _iterator8[_i8++];
+        if (_isArray10) {
+          if (_i10 >= _iterator10.length) break;
+          _ref12 = _iterator10[_i10++];
         } else {
-          _i8 = _iterator8.next();
-          if (_i8.done) break;
-          _ref9 = _i8.value;
+          _i10 = _iterator10.next();
+          if (_i10.done) break;
+          _ref12 = _i10.value;
         }
 
-        var _ref10 = _ref9;
-        var x = _ref10[0];
-        var y = _ref10[1];
+        var _ref13 = _ref12;
+        var x = _ref13[0];
+        var y = _ref13[1];
 
         m = 5 * Math.exp(-0.2 * t / 1000);
         delta = Math.sqrt(Math.pow(x - mousex, 2) + Math.pow(y - mousey, 2));
@@ -304,49 +399,21 @@ var animation = function animation(mousex, mousey) {
   return loop;
 };
 
-var t = undefined;
+var t = undefined,
+    t2 = undefined;
 svg.on("click", function (e) {
 
   var mousex = d3.event.clientX;
   var mousey = d3.event.clientY;
-  var svgTop = svg.node().getBoundingClientRect().top;
   mousey -= svgTop;
 
   if (t !== undefined) t.stop();
   t = d3.timer(animation(mousex, mousey));
-  d3.timeout(function () {
+  if (t2 !== undefined) t2.stop();
+  t2 = d3.timeout(function () {
     return t.stop();
   }, 20000);
 });
-
-// let link = svg.insert("g", ".logo")
-//     .attr("class", "links")
-//   .selectAll("line")
-//   .data(voronoi.links(nodes))
-//   .enter().append("line")
-//     .call(drawLink)
-
-// let node = svg.append("g")
-//   .attr("class", "nodes")
-//   .selectAll("circle")
-//   .data(nodes)
-//   .enter().append("circle")
-//     .attr("r", 2.5)
-//     .call(drawNode)
-
-// function drawLink(link) {
-//   link
-//     .attr("x1", d => d.source[0] )
-//     .attr("y1", d => d.source[1] )
-//     .attr("x2", d => d.target[0] )
-//     .attr("y2", d => d.target[1] )
-// }
-
-// function drawNode(node) {
-//   node
-//     .attr("cx", d => d[0] )
-//     .attr("cy", d => d[1] )
-// }
 
 function drawTriangle(tri) {
   tri.attr("d", function (d) {
